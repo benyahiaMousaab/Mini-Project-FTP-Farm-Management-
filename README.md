@@ -1,5 +1,5 @@
-# FarmPro v3 – Farm Management System
-
+# FarmPro – Farm Management System
+Team : -BENYAHIA Mousaab -FILALI Hicham -TEDJINI Ahmed -MESSAOUD Imadeeddine-LAMMARI Oussama
 ## Installation
 ```bash
 pip install flask pytest flake8
