@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – FarmPro{% endblock %}
+{% block page_title %}Tableau de bord{% endblock %}
+{% block content %}
+
+<!-- ── Alerts Panel ─────────────────────────────────────────── -->
+{% set low_feed = alerts.low_feed %}
+{% set exp_meds = alerts.expiring_meds %}
+{% set low_meds = alerts.low_meds %}
+{% set ongoing  = alerts.ongoing_health %}
+
+{% if low_feed %}
+<div class="alert-strip alert-red">
+  🌾 <strong>Stock faible :</strong>
+  {% for f in low_feed %}<strong>{{ f.feed_type }}</strong> ({{ f.quantity_kg }} kg / min {{ f.min_stock_kg }} kg){% if not loop.last %} &nbsp;·&nbsp; {% endif %}{% endfor %}
+  &nbsp;— <a href="/feeds">Réapprovisionner →</a>
+</div>
+{% endif %}
+{% if exp_meds %}
+<div class="alert-strip alert-yellow">
+  💊 <strong>Médicaments expirant bientôt :</strong>
+  {% for m in exp_meds %}<strong>{{ m.name }}</strong> ({{ m.expiry_date }}){% if not loop.last %}, {% endif %}{% endfor %}
+  &nbsp;— <a href="/health">Gérer →</a>
+</div>
+{% endif %}
+{% if low_meds %}
+<div class="alert-strip alert-red">
+  💊 <strong>Stock médicament faible :</strong>
+  {% for m in low_meds %}<strong>{{ m.name }}</strong> ({{ m.quantity }} {{ m.unit }}){% if not loop.last %}, {% endif %}{% endfor %}
+</div>
+{% endif %}
+{% if ongoing %}
+<div class="alert-strip alert-blue">
+  🏥 <strong>{{ ongoing|length }}</strong> cas de santé en cours — <a href="/health">Voir →</a>
+</div>
+{% endif %}
+
+<!-- ── KPI Strip ────────────────────────────────────────────── -->
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-icon">🐄</div><div class="kpi-value">{{ kpis.total_animals }}</div><div class="kpi-label">Total animaux</div></div>
+  <div class="kpi"><div class="kpi-icon">✅</div><div class="kpi-value">{{ kpis.alive }}</div><div class="kpi-label">En vie</div></div>
+  <div class="kpi"><div class="kpi-icon">💸</div><div class="kpi-value sun">{{ kpis.sold }}</div><div class="kpi-label">Vendus</div></div>
+  <div class="kpi"><div class="kpi-icon">📉</div><div class="kpi-value {% if kpis.mortality_rate > 10 %}red{% endif %}">{{ kpis.mortality_rate }}%</div><div class="kpi-label">Mortalité</div></div>
+  <div class="kpi"><div class="kpi-icon">🌱</div><div class="kpi-value blue">{{ kpis.active_crops }}</div><div class="kpi-label">Cultures actives</div><div class="kpi-sub">{{ kpis.total_area_ha }} ha total</div></div>
+  <div class="kpi"><div class="kpi-icon">🥛</div><div class="kpi-value">{{ "{:,.0f}".format(kpis.production_rev_da) }}<span class="da">DA</span></div><div class="kpi-label">Rev. Production</div></div>
+  <div class="kpi"><div class="kpi-icon">🌾</div><div class="kpi-value sun">{{ "{:,.0f}".format(kpis.crop_revenue_da) }}<span class="da">DA</span></div><div class="kpi-label">Rev. Récoltes</div></div>
+  <div class="kpi"><div class="kpi-icon">💰</div><div class="kpi-value sun">{{ "{:,.0f}".format(kpis.sales_income_da) }}<span class="da">DA</span></div><div class="kpi-label">Ventes animaux</div></div>
+  <div class="kpi"><div class="kpi-icon">💸</div><div class="kpi-value red">{{ "{:,.0f}".format(kpis.total_expenses_da) }}<span class="da">DA</span></div><div class="kpi-label">Dépenses totales</div></div>
+  <div class="kpi"><div class="kpi-icon">🚛</div><div class="kpi-value">{{ "{:,.0f}".format(kpis.transport_total_da) }}<span class="da">DA</span></div><div class="kpi-label">Coûts transport</div></div>
+</div>
+
+<!-- ── Charts row 1 ──────────────────────────────────────────── -->
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">🐄 Animaux par type</span></div><div class="card-body"><canvas id="cType"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">📊 Statut des animaux</span></div><div class="card-body"><canvas id="cStatus"></canvas></div></div>
+</div>
+<!-- ── Charts row 2 ──────────────────────────────────────────── -->
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">🥛 Production lait – 30 derniers jours (L)</span></div><div class="card-body"><canvas id="cMilk"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">📅 Ventes vs Dépenses mensuelles (DA)</span></div><div class="card-body"><canvas id="cOverview"></canvas></div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function load(){
+  const [type,status,milk,overview]=await Promise.all([
+    fetch('/api/analytics/animals-by-type').then(r=>r.json()),
+    fetch('/api/analytics/animals-by-status').then(r=>r.json()),
+    fetch('/api/analytics/daily-milk').then(r=>r.json()),
+    fetch('/api/analytics/monthly-overview').then(r=>r.json()),
+  ]);
+  new Chart(document.getElementById('cType'),{type:'doughnut',data:{labels:type.labels,datasets:[{data:type.values,backgroundColor:PAL,hoverOffset:6}]},options:{plugins:{legend:{position:'bottom'}},cutout:'55%'}});
+  new Chart(document.getElementById('cStatus'),{type:'pie',data:{labels:status.labels,datasets:[{data:status.values,backgroundColor:['#4a7c59','#e8a838','#c0392b'],hoverOffset:6}]},options:{plugins:{legend:{position:'bottom'}}}});
+  new Chart(document.getElementById('cMilk'),{type:'line',data:{labels:milk.dates,datasets:[{label:'Lait (L)',data:milk.values,borderColor:'#2d86c0',backgroundColor:'rgba(45,134,192,.15)',fill:true,tension:.4,pointRadius:2}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  new Chart(document.getElementById('cOverview'),{type:'bar',data:{labels:overview.months,datasets:[
+    {label:'Ventes DA',data:overview.sales,backgroundColor:'rgba(74,124,89,.75)',borderRadius:4},
+    {label:'Dépenses DA',data:overview.expenses,backgroundColor:'rgba(192,57,43,.65)',borderRadius:4},
+  ]},options:{scales:{y:{beginAtZero:true}}}});
+}
+load();
+</script>
+{% endblock %}

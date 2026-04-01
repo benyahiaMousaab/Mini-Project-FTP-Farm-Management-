@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Animaux – FarmPro{% endblock %}
+{% block page_title %}Gestion des Animaux{% endblock %}
+{% block content %}
+<form method="get" class="filter-bar">
+  <div><label>🔍 Recherche</label><input name="search" value="{{ search }}" placeholder="nom, race, type…"></div>
+  <div><label>Statut</label><select name="status"><option value="">Tous</option>
+    <option {% if filter_status=='alive' %}selected{% endif %} value="alive">✅ En vie</option>
+    <option {% if filter_status=='sold'  %}selected{% endif %} value="sold">💸 Vendus</option>
+    <option {% if filter_status=='dead'  %}selected{% endif %} value="dead">☠️ Morts</option>
+  </select></div>
+  <div><label>Type</label><select name="type"><option value="">Tous</option>
+    {% for t in ["Cattle","Sheep","Goat","Poultry","Camel","Horse","Donkey","Other"] %}
+    <option {% if filter_type==t %}selected{% endif %} value="{{t}}">{{t}}</option>{% endfor %}
+  </select></div>
+  <div><label>Sexe</label><select name="gender"><option value="">Tous</option>
+    <option {% if filter_gender=='Female' %}selected{% endif %} value="Female">♀ Femelle</option>
+    <option {% if filter_gender=='Male'   %}selected{% endif %} value="Male">♂ Mâle</option>
+  </select></div>
+  <div><label>Source</label><select name="source"><option value="">Toutes</option>
+    <option {% if filter_source=='purchase' %}selected{% endif %} value="purchase">🛒 Achat</option>
+    <option {% if filter_source=='birth'    %}selected{% endif %} value="birth">🐣 Naissance</option>
+  </select></div>
+  <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+  <a href="/animals" class="btn btn-outline btn-sm">Réinitialiser</a>
+</form>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+  <div style="font-size:.88rem;color:var(--muted)">
+    <strong>{{ animals|length }}</strong> résultats &nbsp;·&nbsp;
+    <strong style="color:#4a7c59">{{ animals|selectattr('status','eq','alive')|list|length }}</strong> en vie &nbsp;·&nbsp;
+    <strong style="color:#e8a838">{{ animals|selectattr('status','eq','sold')|list|length }}</strong> vendus &nbsp;·&nbsp;
+    <strong style="color:#c0392b">{{ animals|selectattr('status','eq','dead')|list|length }}</strong> morts
+  </div>
+  <div style="display:flex;gap:7px">
+    <a href="/api/export/animals" class="btn btn-outline btn-sm">⬇ CSV</a>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addModal')">＋ Ajouter</button>
+  </div>
+</div>
+<div id="flash" class="flash"></div>
+<div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+  <thead><tr><th>ID</th><th>Nom</th><th>Type</th><th>Race</th><th>Sexe</th><th>Naissance</th>
+    <th>Source</th><th>Achat DA</th><th>Transport DA</th><th>Total DA</th>
+    <th>Poids kg</th><th>Statut</th><th>Notes</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for a in animals %}
+  <tr id="row-{{a.id}}">
+    <td>{{a.id}}</td>
+    <td><strong>{{a.name}}</strong></td>
+    <td>{{a.type}}</td><td>{{a.breed}}</td>
+    <td>{% if a.gender=='Female' %}♀{% else %}♂{% endif %} {{a.gender}}</td>
+    <td>{{a.birth_date}}</td>
+    <td><span class="badge {% if a.source=='purchase' %}bg-blue{% else %}bg-green{% endif %}">{% if a.source=='purchase' %}🛒{% else %}🐣{% endif %} {{a.source}}</span></td>
+    <td>{% if a.purchase_price_da>0 %}{{"{:,.0f}".format(a.purchase_price_da)}}{% else %}—{% endif %}</td>
+    <td>{% if a.transport_cost_da>0 %}{{"{:,.0f}".format(a.transport_cost_da)}}{% else %}—{% endif %}</td>
+    <td><strong>{{"{:,.0f}".format(a.purchase_price_da+a.transport_cost_da)}}</strong></td>
+    <td>{{a.weight_kg}}</td>
+    <td><span class="badge {% if a.status=='alive' %}bg-green{% elif a.status=='sold' %}bg-yellow{% else %}bg-red{% endif %}">{% if a.status=='alive' %}✅{% elif a.status=='sold' %}💸{% else %}☠️{% endif %} {{a.status}}</span></td>
+    <td style="max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{a.notes or '—'}}</td>
+    <td><div style="display:flex;gap:3px;flex-wrap:wrap">
+      <button class="btn btn-blue btn-sm" onclick='openEdit({{a|tojson}})' title="Modifier">✏️</button>
+      {% if a.status=='alive' %}
+      <button class="btn btn-sun btn-sm" onclick="markStatus({{a.id}},'sold')" title="Marquer vendu">💸</button>
+      <button class="btn btn-outline btn-sm" onclick="markStatus({{a.id}},'dead')" title="Marquer mort">☠️</button>
+      {% endif %}
+      <button class="btn btn-danger btn-sm" onclick="delAnimal({{a.id}})" title="Supprimer">🗑</button>
+    </div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div></div>
+
+<!-- ADD -->
+<div class="overlay" id="addModal"><div class="modal">
+  <h3>🐄 Ajouter un Animal</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Nom *</label><input type="text" id="f-name" placeholder="ex: Nour"></div>
+    <div class="form-group"><label>Type</label><select id="f-type">{% for t in ["Cattle","Sheep","Goat","Poultry","Camel","Horse","Donkey","Other"] %}<option>{{t}}</option>{% endfor %}</select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Race</label><input type="text" id="f-breed" placeholder="ex: Holstein"></div>
+    <div class="form-group"><label>Sexe</label><select id="f-gender"><option value="Female">♀ Femelle</option><option value="Male">♂ Mâle</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Date de naissance</label><input type="date" id="f-birth"></div>
+    <div class="form-group"><label>Source</label><select id="f-source"><option value="purchase">🛒 Achat</option><option value="birth">🐣 Naissance</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix achat (DA)</label><input type="number" id="f-price" min="0" value="0"></div>
+    <div class="form-group"><label>Transport (DA)</label><input type="number" id="f-trans" min="0" value="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Poids (kg)</label><input type="number" id="f-weight" min="0" step="0.1" value="0"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="f-notes"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitAnimal()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT -->
+<div class="overlay" id="editModal"><div class="modal">
+  <h3>✏️ Modifier <span id="e-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="e-id">
+  <div class="form-row">
+    <div class="form-group"><label>Nom</label><input type="text" id="e-name"></div>
+    <div class="form-group"><label>Type</label><select id="e-type">{% for t in ["Cattle","Sheep","Goat","Poultry","Camel","Horse","Donkey","Other"] %}<option>{{t}}</option>{% endfor %}</select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Race</label><input type="text" id="e-breed"></div>
+    <div class="form-group"><label>Sexe</label><select id="e-gender"><option value="Female">♀ Femelle</option><option value="Male">♂ Mâle</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Date naissance</label><input type="date" id="e-birth"></div>
+    <div class="form-group"><label>Source</label><select id="e-source"><option value="purchase">🛒 Achat</option><option value="birth">🐣 Naissance</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix achat (DA)</label><input type="number" id="e-price" min="0"></div>
+    <div class="form-group"><label>Transport (DA)</label><input type="number" id="e-trans" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Poids (kg)</label><input type="number" id="e-weight" min="0" step="0.1"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="e-notes"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEdit()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function openEdit(a){
+  document.getElementById('e-id').value=a.id;
+  document.getElementById('e-label').textContent='#'+a.id+' – '+a.name;
+  ['name','type','breed','gender','birth_date','source','notes'].forEach(k=>{
+    const el=document.getElementById('e-'+k.replace('_date','').replace('birth_','birth').replace('_da',''));
+    const fieldMap={name:'e-name',type:'e-type',breed:'e-breed',gender:'e-gender',birth_date:'e-birth',source:'e-source',notes:'e-notes'};
+    const id=fieldMap[k]; if(id)document.getElementById(id).value=a[k]||'';
+  });
+  document.getElementById('e-price').value=a.purchase_price_da;
+  document.getElementById('e-trans').value=a.transport_cost_da;
+  document.getElementById('e-weight').value=a.weight_kg;
+  openModal('editModal');
+}
+async function submitEdit(){
+  const id=document.getElementById('e-id').value;
+  const body={name:document.getElementById('e-name').value,type:document.getElementById('e-type').value,breed:document.getElementById('e-breed').value,gender:document.getElementById('e-gender').value,birth_date:document.getElementById('e-birth').value,source:document.getElementById('e-source').value,purchase_price_da:document.getElementById('e-price').value,transport_cost_da:document.getElementById('e-trans').value,weight_kg:document.getElementById('e-weight').value,notes:document.getElementById('e-notes').value};
+  const res=await fetch(`/api/animals/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+  else showFlash(document.getElementById('flash'),'Erreur.','e');
+}
+async function submitAnimal(){
+  const body={name:document.getElementById('f-name').value,type:document.getElementById('f-type').value,breed:document.getElementById('f-breed').value,gender:document.getElementById('f-gender').value,birth_date:document.getElementById('f-birth').value,source:document.getElementById('f-source').value,purchase_price_da:document.getElementById('f-price').value,transport_cost_da:document.getElementById('f-trans').value,weight_kg:document.getElementById('f-weight').value,notes:document.getElementById('f-notes').value};
+  const res=await fetch('/api/animals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addModal');location.reload();}
+}
+async function markStatus(id,status){if(!confirm(`Marquer comme ${status} ?`))return;await fetch(`/api/animals/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});location.reload();}
+async function delAnimal(id){if(!confirm('Supprimer définitivement ?'))return;const res=await fetch(`/api/animals/${id}`,{method:'DELETE'});const d=await res.json();if(d.success){document.getElementById('row-'+id)?.remove();showFlash(document.getElementById('flash'),'Supprimé.');}}
+</script>
+{% endblock %}

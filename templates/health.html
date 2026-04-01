@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Vétérinaire – FarmPro{% endblock %}
+{% block page_title %}Santé & Vétérinaire{% endblock %}
+{% block content %}
+
+{% if expiring %}<div class="alert-strip alert-yellow">💊 <strong>Expiration proche :</strong>
+  {% for m in expiring %}{{m.name}} ({{m.expiry_date}}){% if not loop.last %}, {% endif %}{% endfor %}
+</div>{% endif %}
+{% if low_meds %}<div class="alert-strip alert-red">⚠️ <strong>Stock médicament faible :</strong>
+  {% for m in low_meds %}<strong>{{m.name}}</strong> → {{m.quantity}} {{m.unit}} (min {{m.min_quantity}}){% if not loop.last %} · {% endif %}{% endfor %}
+</div>{% endif %}
+{% if ongoing %}<div class="alert-strip alert-blue">🏥 <strong>{{ongoing|length}} cas en cours :</strong>
+  {% for r in ongoing %}{{r.animal_name}} ({{r.disease or 'contrôle'}}){% if not loop.last %}, {% endif %}{% endfor %}
+</div>{% endif %}
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('rec',this)">📋 Dossiers médicaux</div>
+  <div class="tab" onclick="switchTab('med',this)">💊 Pharmacie</div>
+</div>
+<div id="flash" class="flash"></div>
+
+<!-- ── DOSSIERS ────────────────────────────────────── -->
+<div id="tab-rec">
+  <form method="get" class="filter-bar">
+    <div><label>Type</label>
+      <select name="record_type"><option value="">Tous</option>
+        <option {% if filter_type=='disease' %}selected{% endif %} value="disease">🦠 Maladie</option>
+        <option {% if filter_type=='vaccination' %}selected{% endif %} value="vaccination">💉 Vaccination</option>
+        <option {% if filter_type=='checkup' %}selected{% endif %} value="checkup">🩺 Contrôle</option>
+      </select>
+    </div>
+    <div><label>Espèce</label>
+      <select name="animal_type"><option value="">Toutes</option>
+        {% for t in ["Cattle","Sheep","Goat","Poultry"] %}<option {% if filter_animal==t %}selected{% endif %} value="{{t}}">{{t}}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+    <a href="/health" class="btn btn-outline btn-sm">Réinitialiser</a>
+    <div style="margin-left:auto">
+      <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addRecModal')">＋ Ajouter dossier</button>
+    </div>
+  </form>
+  <div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Animal</th><th>Espèce</th><th>Type</th><th>Maladie/Vaccin</th>
+      <th>Traitement</th><th>Vétérinaire</th><th>Date</th><th>Coût DA</th><th>Résolu</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for r in records %}
+    <tr id="hrow-{{r.id}}">
+      <td>{{r.id}}</td>
+      <td><strong>{{r.animal_name}}</strong> <span style="color:var(--muted)">#{{r.animal_id}}</span></td>
+      <td>{{r.animal_type}}</td>
+      <td><span class="badge {% if r.record_type=='disease' %}bg-red{% elif r.record_type=='vaccination' %}bg-blue{% else %}bg-gray{% endif %}">{{r.record_type}}</span></td>
+      <td>{{r.disease or '—'}}</td>
+      <td>{{r.treatment or '—'}}</td>
+      <td>{{r.vet_name or '—'}}</td>
+      <td>{{r.date}}</td>
+      <td>{{"{:,.0f}".format(r.cost_da)}}</td>
+      <td><span class="badge {% if r.resolved %}bg-green{% else %}bg-yellow{% endif %}">{% if r.resolved %}✅ Résolu{% else %}⏳ En cours{% endif %}</span></td>
+      <td><div style="display:flex;gap:3px">
+        <button class="btn btn-blue btn-sm" onclick='openEditRec({{r|tojson}})' title="Modifier">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="delRec({{r.id}})" title="Supprimer">🗑</button>
+      </div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div></div>
+</div>
+
+<!-- ── PHARMACIE ──────────────────────────────────── -->
+<div id="tab-med" style="display:none">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+    <button class="btn btn-primary btn-sm" onclick="openModal('addMedModal')">＋ Ajouter médicament</button>
+  </div>
+  <div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Nom</th><th>Catégorie</th><th>Qté</th><th>Unité</th><th>Min</th>
+      <th>Expiration</th><th>Fournisseur</th><th>Prix/u DA</th><th>État</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for m in medicines %}
+    <tr id="mrow-{{m.id}}" {% if m in low_meds or m in expiring %}style="background:#fff8f8"{% endif %}>
+      <td>{{m.id}}</td>
+      <td><strong>{{m.name}}</strong></td>
+      <td><span class="badge {% if m.category=='antibiotic' %}bg-red{% elif m.category=='vaccine' %}bg-blue{% else %}bg-gray{% endif %}">{{m.category}}</span></td>
+      <td {% if m.quantity<=m.min_quantity %}style="color:var(--red);font-weight:600"{% endif %}>{{m.quantity}}</td>
+      <td>{{m.unit}}</td>
+      <td style="color:var(--muted)">{{m.min_quantity}}</td>
+      <td {% if m in expiring %}style="color:var(--red);font-weight:600"{% endif %}>{{m.expiry_date}}</td>
+      <td>{{m.supplier}}</td>
+      <td>{{"{:,.0f}".format(m.cost_per_unit_da)}}</td>
+      <td>{% if m in low_meds %}<span class="badge bg-red">⚠️ Faible</span>
+          {% elif m in expiring %}<span class="badge bg-yellow">⏰ Expire</span>
+          {% else %}<span class="badge bg-green">✅ OK</span>{% endif %}</td>
+      <td><div style="display:flex;gap:3px">
+        <button class="btn btn-blue btn-sm" onclick='openEditMed({{m|tojson}})' title="Modifier">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="delMed({{m.id}})" title="Supprimer">🗑</button>
+      </div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div></div>
+</div>
+
+<!-- ADD RECORD -->
+<div class="overlay" id="addRecModal"><div class="modal">
+  <h3>📋 Ajouter un dossier médical</h3>
+  <div class="form-row">
+    <div class="form-group"><label>ID Animal</label><input type="number" id="r-aid" min="1" value="1"></div>
+    <div class="form-group"><label>Nom de l'animal</label><input type="text" id="r-aname" placeholder="ex: Nour"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Espèce</label>
+      <select id="r-atype"><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option></select>
+    </div>
+    <div class="form-group"><label>Type de dossier</label>
+      <select id="r-type"><option value="disease">🦠 Maladie</option><option value="vaccination">💉 Vaccination</option><option value="checkup">🩺 Contrôle</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Maladie / Vaccin</label><input type="text" id="r-disease"></div>
+    <div class="form-group"><label>Traitement</label><input type="text" id="r-treatment"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Vétérinaire</label><input type="text" id="r-vet"></div>
+    <div class="form-group"><label>Date</label><input type="date" id="r-date"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Coût (DA)</label><input type="number" id="r-cost" min="0" value="0"></div>
+    <div class="form-group"><label>Résolu ?</label>
+      <select id="r-resolved"><option value="true">✅ Oui</option><option value="false">⏳ En cours</option></select>
+    </div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="r-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addRecModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitRec()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT RECORD -->
+<div class="overlay" id="editRecModal"><div class="modal">
+  <h3>✏️ Modifier dossier — <span id="er-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="er-id">
+  <div class="form-row">
+    <div class="form-group"><label>ID Animal</label><input type="number" id="er-aid" min="1"></div>
+    <div class="form-group"><label>Nom de l'animal</label><input type="text" id="er-aname"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Espèce</label>
+      <select id="er-atype"><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option></select>
+    </div>
+    <div class="form-group"><label>Type</label>
+      <select id="er-type"><option value="disease">🦠 Maladie</option><option value="vaccination">💉 Vaccination</option><option value="checkup">🩺 Contrôle</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Maladie / Vaccin</label><input type="text" id="er-disease"></div>
+    <div class="form-group"><label>Traitement</label><input type="text" id="er-treatment"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Vétérinaire</label><input type="text" id="er-vet"></div>
+    <div class="form-group"><label>Date</label><input type="date" id="er-date"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Coût (DA)</label><input type="number" id="er-cost" min="0"></div>
+    <div class="form-group"><label>Résolu ?</label>
+      <select id="er-resolved"><option value="true">✅ Oui</option><option value="false">⏳ En cours</option></select>
+    </div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="er-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editRecModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditRec()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+
+<!-- ADD MEDICINE -->
+<div class="overlay" id="addMedModal"><div class="modal">
+  <h3>💊 Ajouter médicament</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Nom</label><input type="text" id="m-name" placeholder="ex: Pénicilline G"></div>
+    <div class="form-group"><label>Catégorie</label>
+      <select id="m-cat"><option value="antibiotic">Antibiotique</option><option value="vaccine">Vaccin</option><option value="antiparasitic">Antiparasitaire</option><option value="other">Autre</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité</label><input type="number" id="m-qty" min="0" value="10"></div>
+    <div class="form-group"><label>Seuil min</label><input type="number" id="m-min" min="0" value="5"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Unité</label><input type="text" id="m-unit" placeholder="ampoules / doses / ml"></div>
+    <div class="form-group"><label>Date expiration</label><input type="date" id="m-exp"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Fournisseur</label><input type="text" id="m-supplier"></div>
+    <div class="form-group"><label>Prix/unité (DA)</label><input type="number" id="m-cost" min="0" value="0"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addMedModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitMed()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT MEDICINE -->
+<div class="overlay" id="editMedModal"><div class="modal">
+  <h3>✏️ Modifier médicament — <span id="em-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="em-id">
+  <div class="form-row">
+    <div class="form-group"><label>Nom</label><input type="text" id="em-name"></div>
+    <div class="form-group"><label>Catégorie</label>
+      <select id="em-cat"><option value="antibiotic">Antibiotique</option><option value="vaccine">Vaccin</option><option value="antiparasitic">Antiparasitaire</option><option value="other">Autre</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité</label><input type="number" id="em-qty" min="0"></div>
+    <div class="form-group"><label>Seuil min</label><input type="number" id="em-min" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Unité</label><input type="text" id="em-unit"></div>
+    <div class="form-group"><label>Date expiration</label><input type="date" id="em-exp"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Fournisseur</label><input type="text" id="em-supplier"></div>
+    <div class="form-group"><label>Prix/unité (DA)</label><input type="number" id="em-cost" min="0"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editMedModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditMed()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('input[type=date]').forEach(el=>el.value=new Date().toISOString().split('T')[0]);
+
+function openEditRec(r){
+  document.getElementById('er-id').value=r.id;
+  document.getElementById('er-label').textContent='#'+r.id+' – '+r.animal_name;
+  document.getElementById('er-aid').value=r.animal_id;
+  document.getElementById('er-aname').value=r.animal_name;
+  document.getElementById('er-atype').value=r.animal_type;
+  document.getElementById('er-type').value=r.record_type;
+  document.getElementById('er-disease').value=r.disease||'';
+  document.getElementById('er-treatment').value=r.treatment||'';
+  document.getElementById('er-vet').value=r.vet_name||'';
+  document.getElementById('er-date').value=r.date;
+  document.getElementById('er-cost').value=r.cost_da;
+  document.getElementById('er-resolved').value=r.resolved?'true':'false';
+  document.getElementById('er-notes').value=r.notes||'';
+  openModal('editRecModal');
+}
+async function submitEditRec(){
+  const id=document.getElementById('er-id').value;
+  const body={animal_id:document.getElementById('er-aid').value,animal_name:document.getElementById('er-aname').value,animal_type:document.getElementById('er-atype').value,record_type:document.getElementById('er-type').value,disease:document.getElementById('er-disease').value,treatment:document.getElementById('er-treatment').value,vet_name:document.getElementById('er-vet').value,date:document.getElementById('er-date').value,cost_da:document.getElementById('er-cost').value,resolved:document.getElementById('er-resolved').value==='true',notes:document.getElementById('er-notes').value};
+  const res=await fetch(`/api/health/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editRecModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+}
+async function submitRec(){
+  const body={animal_id:document.getElementById('r-aid').value,animal_name:document.getElementById('r-aname').value,animal_type:document.getElementById('r-atype').value,record_type:document.getElementById('r-type').value,disease:document.getElementById('r-disease').value,treatment:document.getElementById('r-treatment').value,vet_name:document.getElementById('r-vet').value,date:document.getElementById('r-date').value,cost_da:document.getElementById('r-cost').value,resolved:document.getElementById('r-resolved').value==='true',notes:document.getElementById('r-notes').value};
+  const res=await fetch('/api/health',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addRecModal');location.reload();}
+}
+async function delRec(id){if(!confirm('Supprimer ?'))return;const res=await fetch(`/api/health/${id}`,{method:'DELETE'});const d=await res.json();if(d.success)document.getElementById('hrow-'+id)?.remove();}
+
+function openEditMed(m){
+  document.getElementById('em-id').value=m.id;
+  document.getElementById('em-label').textContent='#'+m.id+' – '+m.name;
+  document.getElementById('em-name').value=m.name;
+  document.getElementById('em-cat').value=m.category;
+  document.getElementById('em-qty').value=m.quantity;
+  document.getElementById('em-min').value=m.min_quantity;
+  document.getElementById('em-unit').value=m.unit;
+  document.getElementById('em-exp').value=m.expiry_date;
+  document.getElementById('em-supplier').value=m.supplier;
+  document.getElementById('em-cost').value=m.cost_per_unit_da;
+  openModal('editMedModal');
+}
+async function submitEditMed(){
+  const id=document.getElementById('em-id').value;
+  const body={name:document.getElementById('em-name').value,category:document.getElementById('em-cat').value,quantity:document.getElementById('em-qty').value,min_quantity:document.getElementById('em-min').value,unit:document.getElementById('em-unit').value,expiry_date:document.getElementById('em-exp').value,supplier:document.getElementById('em-supplier').value,cost_per_unit_da:document.getElementById('em-cost').value};
+  const res=await fetch(`/api/medicines/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editMedModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+}
+async function submitMed(){
+  const body={name:document.getElementById('m-name').value,category:document.getElementById('m-cat').value,quantity:document.getElementById('m-qty').value,min_quantity:document.getElementById('m-min').value,unit:document.getElementById('m-unit').value,expiry_date:document.getElementById('m-exp').value,supplier:document.getElementById('m-supplier').value,cost_per_unit_da:document.getElementById('m-cost').value};
+  const res=await fetch('/api/medicines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addMedModal');location.reload();}
+}
+async function delMed(id){if(!confirm('Supprimer ?'))return;const res=await fetch(`/api/medicines/${id}`,{method:'DELETE'});const d=await res.json();if(d.success)document.getElementById('mrow-'+id)?.remove();}
+</script>
+{% endblock %}

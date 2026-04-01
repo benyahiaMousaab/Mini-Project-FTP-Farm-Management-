@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Ventes & Achats – FarmPro{% endblock %}
+{% block page_title %}Ventes & Achats Animaux{% endblock %}
+{% block content %}
+
+<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
+  <div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-value sun">{{"{:,.0f}".format(pl.income)}}<span class="da">DA</span></div><div class="kpi-label">Total revenus</div></div>
+  <div class="kpi"><div class="kpi-icon">📉</div><div class="kpi-value red">{{"{:,.0f}".format(pl.expenses)}}<span class="da">DA</span></div><div class="kpi-label">Total dépenses</div></div>
+  <div class="kpi"><div class="kpi-icon">💹</div><div class="kpi-value {% if pl.net>=0 %}sun{% else %}red{% endif %}">{{"{:+,.0f}".format(pl.net)}}<span class="da">DA</span></div><div class="kpi-label">Bénéfice net</div></div>
+</div>
+
+<form method="get" class="filter-bar">
+  <div><label>Type</label>
+    <select name="type"><option value="">Tous</option>
+      <option {% if filter_type=='sale' %}selected{% endif %} value="sale">💸 Ventes</option>
+      <option {% if filter_type=='purchase' %}selected{% endif %} value="purchase">🛒 Achats</option>
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+  <a href="/sales" class="btn btn-outline btn-sm">Réinitialiser</a>
+  <div style="margin-left:auto">
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addSaleModal')">＋ Ajouter transaction</button>
+  </div>
+</form>
+
+<div id="flash" class="flash"></div>
+
+<div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+  <thead><tr><th>ID</th><th>Type</th><th>Animal</th><th>Espèce</th><th>Race</th><th>Qté</th>
+    <th>Prix/tête DA</th><th>Transport DA</th><th>Total DA</th><th>Date</th><th>Acheteur/Vendeur</th><th>Notes</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for t in transactions %}
+  <tr id="srow-{{t.id}}">
+    <td>{{t.id}}</td>
+    <td><span class="badge {% if t.transaction_type=='sale' %}bg-green{% else %}bg-blue{% endif %}">
+      {% if t.transaction_type=='sale' %}💸 Vente{% else %}🛒 Achat{% endif %}
+    </span></td>
+    <td><strong>{{t.animal_name}}</strong></td>
+    <td>{{t.animal_type}}</td>
+    <td>{{t.breed}}</td>
+    <td>{{t.quantity|int}}</td>
+    <td>{{"{:,.0f}".format(t.price_per_head_da)}}</td>
+    <td>{% if t.transport_cost_da>0 %}{{"{:,.0f}".format(t.transport_cost_da)}}{% else %}—{% endif %}</td>
+    <td><strong>{{"{:,.0f}".format(t.total_da)}}</strong></td>
+    <td>{{t.date}}</td>
+    <td>{{t.buyer_seller or '—'}}</td>
+    <td>{{t.notes or '—'}}</td>
+    <td><div style="display:flex;gap:3px">
+      <button class="btn btn-blue btn-sm" onclick='openEditSale({{t|tojson}})' title="Modifier">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="delSale({{t.id}})" title="Supprimer">🗑</button>
+    </div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div></div>
+
+<!-- ADD -->
+<div class="overlay" id="addSaleModal"><div class="modal">
+  <h3>💰 Nouvelle transaction</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Type</label>
+      <select id="s-type"><option value="sale">💸 Vente</option><option value="purchase">🛒 Achat</option></select>
+    </div>
+    <div class="form-group"><label>Date</label><input type="date" id="s-date"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Nom animal</label><input type="text" id="s-name" placeholder="ex: Nour / Lot poulets"></div>
+    <div class="form-group"><label>Espèce</label>
+      <select id="s-atype"><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option><option>Other</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Race</label><input type="text" id="s-breed"></div>
+    <div class="form-group"><label>Quantité (têtes)</label><input type="number" id="s-qty" min="1" value="1" oninput="calcTotal('s')"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix / tête (DA)</label><input type="number" id="s-price" min="0" value="0" oninput="calcTotal('s')"></div>
+    <div class="form-group"><label>Transport (DA)</label><input type="number" id="s-trans" min="0" value="0" oninput="calcTotal('s')"></div>
+  </div>
+  <div style="background:var(--sky);border-radius:7px;padding:9px 13px;font-size:.85rem;margin-bottom:8px">
+    Total : <strong id="s-total-preview">0 DA</strong>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Acheteur / Vendeur</label><input type="text" id="s-party"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="s-notes"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addSaleModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitSale()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT -->
+<div class="overlay" id="editSaleModal"><div class="modal">
+  <h3>✏️ Modifier transaction — <span id="es-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="es-id">
+  <div class="form-row">
+    <div class="form-group"><label>Type</label>
+      <select id="es-type"><option value="sale">💸 Vente</option><option value="purchase">🛒 Achat</option></select>
+    </div>
+    <div class="form-group"><label>Date</label><input type="date" id="es-date"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Nom animal</label><input type="text" id="es-name"></div>
+    <div class="form-group"><label>Espèce</label>
+      <select id="es-atype"><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option><option>Other</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Race</label><input type="text" id="es-breed"></div>
+    <div class="form-group"><label>Quantité (têtes)</label><input type="number" id="es-qty" min="1" oninput="calcTotal('es')"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix / tête (DA)</label><input type="number" id="es-price" min="0" oninput="calcTotal('es')"></div>
+    <div class="form-group"><label>Transport (DA)</label><input type="number" id="es-trans" min="0" oninput="calcTotal('es')"></div>
+  </div>
+  <div style="background:var(--sky);border-radius:7px;padding:9px 13px;font-size:.85rem;margin-bottom:8px">
+    Total : <strong id="es-total-preview">0 DA</strong>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Acheteur / Vendeur</label><input type="text" id="es-party"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="es-notes"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editSaleModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditSale()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('#s-date').value=new Date().toISOString().split('T')[0];
+
+function calcTotal(pfx){
+  const qty=parseFloat(document.getElementById(pfx+'-qty').value)||0;
+  const price=parseFloat(document.getElementById(pfx+'-price').value)||0;
+  const trans=parseFloat(document.getElementById(pfx+'-trans').value)||0;
+  document.getElementById(pfx+'-total-preview').textContent=(qty*price+trans).toLocaleString('fr-DZ')+' DA';
+}
+
+function openEditSale(t){
+  document.getElementById('es-id').value=t.id;
+  document.getElementById('es-label').textContent='#'+t.id+' – '+t.animal_name;
+  document.getElementById('es-type').value=t.transaction_type;
+  document.getElementById('es-date').value=t.date;
+  document.getElementById('es-name').value=t.animal_name;
+  document.getElementById('es-atype').value=t.animal_type;
+  document.getElementById('es-breed').value=t.breed||'';
+  document.getElementById('es-qty').value=t.quantity;
+  document.getElementById('es-price').value=t.price_per_head_da;
+  document.getElementById('es-trans').value=t.transport_cost_da;
+  document.getElementById('es-party').value=t.buyer_seller||'';
+  document.getElementById('es-notes').value=t.notes||'';
+  calcTotal('es');
+  openModal('editSaleModal');
+}
+async function submitEditSale(){
+  const id=document.getElementById('es-id').value;
+  const body={transaction_type:document.getElementById('es-type').value,date:document.getElementById('es-date').value,animal_name:document.getElementById('es-name').value,animal_type:document.getElementById('es-atype').value,breed:document.getElementById('es-breed').value,quantity:document.getElementById('es-qty').value,price_per_head_da:document.getElementById('es-price').value,transport_cost_da:document.getElementById('es-trans').value,buyer_seller:document.getElementById('es-party').value,notes:document.getElementById('es-notes').value};
+  const res=await fetch(`/api/sales/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editSaleModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+}
+async function submitSale(){
+  const body={transaction_type:document.getElementById('s-type').value,date:document.getElementById('s-date').value,animal_name:document.getElementById('s-name').value,animal_type:document.getElementById('s-atype').value,breed:document.getElementById('s-breed').value,quantity:document.getElementById('s-qty').value,price_per_head_da:document.getElementById('s-price').value,transport_cost_da:document.getElementById('s-trans').value,buyer_seller:document.getElementById('s-party').value,notes:document.getElementById('s-notes').value,animal_id:0};
+  const res=await fetch('/api/sales',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addSaleModal');location.reload();}
+}
+async function delSale(id){if(!confirm('Supprimer ?'))return;const res=await fetch(`/api/sales/${id}`,{method:'DELETE'});const d=await res.json();if(d.success)document.getElementById('srow-'+id)?.remove();}
+</script>
+{% endblock %}

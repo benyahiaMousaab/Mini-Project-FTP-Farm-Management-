@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "animal_id": 1,
+    "animal_name": "Nour",
+    "animal_type": "Cattle",
+    "record_type": "vaccination",
+    "disease": "Vaccin FMDV",
+    "treatment": "Vaccination annuelle",
+    "vet_name": "Dr. Ahmed",
+    "date": "2024-01-20",
+    "cost_da": 3000,
+    "notes": "",
+    "resolved": true
+  },
+  {
+    "id": 2,
+    "animal_id": 3,
+    "animal_name": "Layla",
+    "animal_type": "Sheep",
+    "record_type": "disease",
+    "disease": "Pneumonie",
+    "treatment": "Antibiotiques 5j",
+    "vet_name": "Dr. Ahmed",
+    "date": "2024-02-14",
+    "cost_da": 7200,
+    "notes": "Guérie",
+    "resolved": true
+  },
+  {
+    "id": 3,
+    "animal_id": 6,
+    "animal_name": "Zéphyr",
+    "animal_type": "Goat",
+    "record_type": "checkup",
+    "disease": "",
+    "treatment": "Contrôle de routine",
+    "vet_name": "Dr. Sara",
+    "date": "2024-03-01",
+    "cost_da": 1800,
+    "notes": "Saine",
+    "resolved": true
+  }
+]

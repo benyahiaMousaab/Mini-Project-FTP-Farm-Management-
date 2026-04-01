@@ -1,0 +1,46 @@
+[
+  {
+    "id": 1,
+    "name": "Pénicilline G",
+    "category": "antibiotic",
+    "quantity": 50,
+    "min_quantity": 10,
+    "unit": "ampoules",
+    "expiry_date": "2025-06-01",
+    "supplier": "VetCo",
+    "cost_per_unit_da": 420
+  },
+  {
+    "id": 2,
+    "name": "Vaccin FMDV",
+    "category": "vaccine",
+    "quantity": 4,
+    "min_quantity": 5,
+    "unit": "doses",
+    "expiry_date": "2024-12-01",
+    "supplier": "AgriPharm",
+    "cost_per_unit_da": 1440
+  },
+  {
+    "id": 3,
+    "name": "Ivermectine",
+    "category": "antiparasitic",
+    "quantity": 30,
+    "min_quantity": 8,
+    "unit": "ml",
+    "expiry_date": "2025-03-15",
+    "supplier": "VetCo",
+    "cost_per_unit_da": 600
+  },
+  {
+    "id": 4,
+    "name": "Oxytétracycline",
+    "category": "antibiotic",
+    "quantity": 40,
+    "min_quantity": 10,
+    "unit": "ampoules",
+    "expiry_date": "2025-09-01",
+    "supplier": "AgriPharm",
+    "cost_per_unit_da": 480
+  }
+]

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Production – FarmPro{% endblock %}
+{% block page_title %}Production{% endblock %}
+{% block content %}
+
+<form method="get" class="filter-bar">
+  <div><label>Produit</label>
+    <select name="product_type"><option value="">Tous</option>
+      {% for t in ["milk","eggs","wool","honey","meat"] %}
+      <option {% if filter_type==t %}selected{% endif %} value="{{t}}">{{t}}</option>{% endfor %}
+    </select>
+  </div>
+  <div><label>Espèce</label>
+    <select name="animal_type"><option value="">Toutes</option>
+      {% for t in ["Cattle","Sheep","Goat","Poultry","Bees"] %}
+      <option {% if filter_animal==t %}selected{% endif %} value="{{t}}">{{t}}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+  <a href="/production" class="btn btn-outline btn-sm">Réinitialiser</a>
+  <div style="margin-left:auto;display:flex;gap:7px">
+    <a href="/api/export/production" class="btn btn-outline btn-sm">⬇ CSV</a>
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addProdModal')">＋ Ajouter</button>
+  </div>
+</form>
+
+<div id="flash" class="flash"></div>
+
+<div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+  <thead><tr><th>ID</th><th>Date</th><th>Produit</th><th>Quantité</th><th>Unité</th>
+    <th>Espèce</th><th>Nom animal</th><th>Prix/u DA</th><th>Revenu DA</th><th>Notes</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for r in records %}
+  <tr id="prow-{{r.id}}">
+    <td>{{r.id}}</td>
+    <td>{{r.date}}</td>
+    <td><span class="badge {% if r.product_type=='milk' %}bg-blue{% elif r.product_type=='eggs' %}bg-yellow{% elif r.product_type=='wool' %}bg-purple{% elif r.product_type=='meat' %}bg-red{% else %}bg-green{% endif %}">
+      {%if r.product_type=='milk'%}🥛{%elif r.product_type=='eggs'%}🥚{%elif r.product_type=='wool'%}🧶{%elif r.product_type=='honey'%}🍯{%else%}🥩{%endif%} {{r.product_type}}
+    </span></td>
+    <td>{{r.quantity}}</td>
+    <td>{{r.unit}}</td>
+    <td>{{r.animal_type}}</td>
+    <td>{{r.animal_name or '—'}}</td>
+    <td>{{"{:,.0f}".format(r.price_per_unit_da)}}</td>
+    <td><strong>{{"{:,.0f}".format(r.quantity * r.price_per_unit_da)}}</strong></td>
+    <td>{{r.notes or '—'}}</td>
+    <td><div style="display:flex;gap:3px">
+      <button class="btn btn-blue btn-sm" onclick='openEditProd({{r|tojson}})' title="Modifier">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="delProd({{r.id}})" title="Supprimer">🗑</button>
+    </div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div></div>
+
+<!-- ADD -->
+<div class="overlay" id="addProdModal"><div class="modal">
+  <h3>🥛 Ajouter production</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Date</label><input type="date" id="p-date"></div>
+    <div class="form-group"><label>Produit</label>
+      <select id="p-type" onchange="setUnit(this.value,'p-unit-lbl')">
+        <option value="milk">🥛 Lait</option><option value="eggs">🥚 Œufs</option>
+        <option value="wool">🧶 Laine</option><option value="honey">🍯 Miel</option><option value="meat">🥩 Viande</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité (<span id="p-unit-lbl">L</span>)</label><input type="number" id="p-qty" min="0" step="0.1" value="0"></div>
+    <div class="form-group"><label>Prix/unité (DA)</label><input type="number" id="p-price" min="0" value="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Espèce</label>
+      <select id="p-animal"><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option><option>Bees</option></select>
+    </div>
+    <div class="form-group"><label>Nom animal</label><input type="text" id="p-name" placeholder="ex: Nour"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="p-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addProdModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitProd()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT -->
+<div class="overlay" id="editProdModal"><div class="modal">
+  <h3>✏️ Modifier production — <span id="ep-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="ep-id">
+  <div class="form-row">
+    <div class="form-group"><label>Date</label><input type="date" id="ep-date"></div>
+    <div class="form-group"><label>Produit</label>
+      <select id="ep-type" onchange="setUnit(this.value,'ep-unit-lbl')">
+        <option value="milk">🥛 Lait</option><option value="eggs">🥚 Œufs</option>
+        <option value="wool">🧶 Laine</option><option value="honey">🍯 Miel</option><option value="meat">🥩 Viande</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité (<span id="ep-unit-lbl">L</span>)</label><input type="number" id="ep-qty" min="0" step="0.1"></div>
+    <div class="form-group"><label>Prix/unité (DA)</label><input type="number" id="ep-price" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Espèce</label>
+      <select id="ep-animal"><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option><option>Bees</option></select>
+    </div>
+    <div class="form-group"><label>Nom animal</label><input type="text" id="ep-name"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="ep-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editProdModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditProd()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('#p-date').value=new Date().toISOString().split('T')[0];
+const UNITS={milk:'L',eggs:'pièces',wool:'kg',honey:'kg',meat:'kg'};
+function setUnit(v,lbl){document.getElementById(lbl).textContent=UNITS[v]||'unité';}
+
+function openEditProd(r){
+  document.getElementById('ep-id').value=r.id;
+  document.getElementById('ep-label').textContent='#'+r.id;
+  document.getElementById('ep-date').value=r.date;
+  document.getElementById('ep-type').value=r.product_type;
+  setUnit(r.product_type,'ep-unit-lbl');
+  document.getElementById('ep-qty').value=r.quantity;
+  document.getElementById('ep-price').value=r.price_per_unit_da;
+  document.getElementById('ep-animal').value=r.animal_type;
+  document.getElementById('ep-name').value=r.animal_name||'';
+  document.getElementById('ep-notes').value=r.notes||'';
+  openModal('editProdModal');
+}
+async function submitEditProd(){
+  const id=document.getElementById('ep-id').value;
+  const body={date:document.getElementById('ep-date').value,product_type:document.getElementById('ep-type').value,quantity:document.getElementById('ep-qty').value,price_per_unit_da:document.getElementById('ep-price').value,animal_type:document.getElementById('ep-animal').value,animal_name:document.getElementById('ep-name').value,notes:document.getElementById('ep-notes').value};
+  const res=await fetch(`/api/production/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editProdModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+}
+async function submitProd(){
+  const body={date:document.getElementById('p-date').value,product_type:document.getElementById('p-type').value,quantity:document.getElementById('p-qty').value,price_per_unit_da:document.getElementById('p-price').value,animal_type:document.getElementById('p-animal').value,animal_name:document.getElementById('p-name').value,notes:document.getElementById('p-notes').value};
+  const res=await fetch('/api/production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addProdModal');location.reload();}
+}
+async function delProd(id){if(!confirm('Supprimer ?'))return;const res=await fetch(`/api/production/${id}`,{method:'DELETE'});const d=await res.json();if(d.success)document.getElementById('prow-'+id)?.remove();}
+</script>
+{% endblock %}

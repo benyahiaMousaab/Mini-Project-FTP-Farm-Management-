@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "animal_id": 5,
+    "animal_name": "Lot poulets",
+    "animal_type": "Poultry",
+    "breed": "Broiler",
+    "transaction_type": "sale",
+    "quantity": 50,
+    "price_per_head_da": 2160,
+    "transport_cost_da": 3000,
+    "total_da": 111000,
+    "date": "2024-03-15",
+    "buyer_seller": "Marché El-Bayadh",
+    "notes": ""
+  },
+  {
+    "id": 2,
+    "animal_id": 1,
+    "animal_name": "Nour",
+    "animal_type": "Cattle",
+    "breed": "Holstein",
+    "transaction_type": "purchase",
+    "quantity": 1,
+    "price_per_head_da": 144000,
+    "transport_cost_da": 3500,
+    "total_da": 147500,
+    "date": "2023-01-15",
+    "buyer_seller": "Ferme Hassan",
+    "notes": ""
+  },
+  {
+    "id": 3,
+    "animal_id": 3,
+    "animal_name": "Layla",
+    "animal_type": "Sheep",
+    "breed": "Ouled Djellal",
+    "transaction_type": "sale",
+    "quantity": 2,
+    "price_per_head_da": 42000,
+    "transport_cost_da": 1500,
+    "total_da": 85500,
+    "date": "2024-02-28",
+    "buyer_seller": "Marché local",
+    "notes": ""
+  }
+]

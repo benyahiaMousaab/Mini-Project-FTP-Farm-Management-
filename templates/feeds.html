@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Alimentation – FarmPro{% endblock %}
+{% block page_title %}Alimentation & Stocks{% endblock %}
+{% block content %}
+
+{% if low_stock %}
+<div class="alert-strip alert-red">
+  🌾 <strong>Stock critique ({{ low_stock|length }}) :</strong>
+  {% for f in low_stock %}<strong>{{ f.feed_type }}</strong> → {{ f.quantity_kg }} kg (seuil : {{ f.min_stock_kg }} kg){% if not loop.last %} &nbsp;·&nbsp; {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('inv',this)">📦 Inventaire</div>
+  <div class="tab" onclick="switchTab('log',this)">📋 Journal d'alimentation</div>
+</div>
+<div id="flash" class="flash"></div>
+
+<!-- ── INVENTAIRE ─────────────────────────────────── -->
+<div id="tab-inv">
+  <form method="get" class="filter-bar">
+    <div><label>Origine</label>
+      <select name="origin"><option value="">Toutes</option>
+        <option {% if filter_origin=='Local' %}selected{% endif %} value="Local">🏡 Local</option>
+        <option {% if filter_origin=='Importé' %}selected{% endif %} value="Importé">🌍 Importé</option>
+        <option {% if filter_origin=='Produit à la ferme' %}selected{% endif %} value="Produit à la ferme">🌾 Ferme</option>
+      </select>
+    </div>
+    <div><label>Type</label>
+      <select name="feed_type"><option value="">Tous</option>
+        {% for t in ["Orge","Foin / Paille","Aliment composé","Ensilage","Son de blé","Maïs","Complément minéral","Autre"] %}
+        <option {% if filter_type==t %}selected{% endif %} value="{{t}}">{{t}}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+    <a href="/feeds" class="btn btn-outline btn-sm">Réinitialiser</a>
+    <div style="margin-left:auto;display:flex;gap:7px">
+      <a href="/api/export/feeds" class="btn btn-outline btn-sm">⬇ CSV</a>
+      <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addFeedModal')">＋ Ajouter stock</button>
+    </div>
+  </form>
+
+  <div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Type</th><th>Qté kg</th><th>Seuil</th><th>Origine</th>
+      <th>Achat</th><th>Fournisseur</th><th>Prix/kg DA</th><th>Transport DA</th>
+      <th>Total DA</th><th>État</th><th>Notes</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for f in inventory %}
+    <tr id="frow-{{f.id}}" {% if f.quantity_kg<=f.min_stock_kg %}style="background:#fff8f8"{% endif %}>
+      <td>{{f.id}}</td>
+      <td><strong>{{f.feed_type}}</strong></td>
+      <td {% if f.quantity_kg<=f.min_stock_kg %}style="color:var(--red);font-weight:600"{% endif %}>{{f.quantity_kg}}</td>
+      <td style="color:var(--muted)">{{f.min_stock_kg}}</td>
+      <td><span class="badge {% if f.origin=='Local' %}bg-green{% elif f.origin=='Importé' %}bg-blue{% else %}bg-yellow{% endif %}">
+        {% if f.origin=='Local' %}🏡{% elif f.origin=='Importé' %}🌍{% else %}🌾{% endif %} {{f.origin}}
+      </span></td>
+      <td>{{f.purchase_date}}</td>
+      <td>{{f.supplier or '—'}}</td>
+      <td>{{f.cost_per_kg_da}}</td>
+      <td>{% if f.transport_cost_da>0 %}{{"{:,.0f}".format(f.transport_cost_da)}}{% else %}—{% endif %}</td>
+      <td><strong>{{"{:,.0f}".format(f.quantity_kg*f.cost_per_kg_da+f.transport_cost_da)}}</strong></td>
+      <td>{% if f.quantity_kg<=f.min_stock_kg %}<span class="badge bg-red">⚠️ Faible</span>{% else %}<span class="badge bg-green">✅ OK</span>{% endif %}</td>
+      <td style="max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.notes or '—'}}</td>
+      <td><div style="display:flex;gap:3px">
+        <button class="btn btn-blue btn-sm" onclick='openEditFeed({{f|tojson}})' title="Modifier">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="delFeed({{f.id}})" title="Supprimer">🗑</button>
+      </div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div></div>
+</div>
+
+<!-- ── JOURNAL ─────────────────────────────────────── -->
+<div id="tab-log" style="display:none">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+    <button class="btn btn-primary btn-sm" onclick="openModal('logModal')">＋ Enregistrer alimentation</button>
+  </div>
+  <div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Date</th><th>Type aliment</th><th>Quantité kg</th><th>Groupe animal</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for l in log %}
+    <tr><td>{{l.id}}</td><td>{{l.date}}</td><td>{{l.feed_type}}</td>
+        <td>{{l.quantity_kg}}</td><td>{{l.animal_type}}</td><td>{{l.notes or '—'}}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div></div>
+</div>
+
+<!-- ADD STOCK -->
+<div class="overlay" id="addFeedModal"><div class="modal">
+  <h3>📦 Ajouter stock d'aliment</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Type d'aliment</label>
+      <select id="ff-type">{% for t in ["Orge","Foin / Paille","Aliment composé","Ensilage","Son de blé","Maïs","Complément minéral","Autre"] %}<option>{{t}}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Origine</label>
+      <select id="ff-origin"><option value="Local">🏡 Local</option><option value="Importé">🌍 Importé</option><option value="Produit à la ferme">🌾 Produit à la ferme</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité (kg)</label><input type="number" id="ff-qty" min="0" value="100"></div>
+    <div class="form-group"><label>Seuil alerte (kg)</label><input type="number" id="ff-min" min="0" value="50"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix / kg (DA)</label><input type="number" id="ff-cost" min="0" step="0.1" value="0"></div>
+    <div class="form-group"><label>Transport (DA)</label><input type="number" id="ff-trans" min="0" value="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Date achat</label><input type="date" id="ff-date"></div>
+    <div class="form-group"><label>Fournisseur</label><input type="text" id="ff-supplier"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="ff-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addFeedModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitFeed()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT STOCK -->
+<div class="overlay" id="editFeedModal"><div class="modal">
+  <h3>✏️ Modifier stock — <span id="ef-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="ef-id">
+  <div class="form-row">
+    <div class="form-group"><label>Type d'aliment</label>
+      <select id="ef-type">{% for t in ["Orge","Foin / Paille","Aliment composé","Ensilage","Son de blé","Maïs","Complément minéral","Autre"] %}<option>{{t}}</option>{% endfor %}</select>
+    </div>
+    <div class="form-group"><label>Origine</label>
+      <select id="ef-origin"><option value="Local">🏡 Local</option><option value="Importé">🌍 Importé</option><option value="Produit à la ferme">🌾 Produit à la ferme</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité (kg)</label><input type="number" id="ef-qty" min="0"></div>
+    <div class="form-group"><label>Seuil alerte (kg)</label><input type="number" id="ef-min" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix / kg (DA)</label><input type="number" id="ef-cost" min="0" step="0.1"></div>
+    <div class="form-group"><label>Transport (DA)</label><input type="number" id="ef-trans" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Date achat</label><input type="date" id="ef-date"></div>
+    <div class="form-group"><label>Fournisseur</label><input type="text" id="ef-supplier"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="ef-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editFeedModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditFeed()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+
+<!-- LOG FEEDING -->
+<div class="overlay" id="logModal"><div class="modal">
+  <h3>📋 Journal d'alimentation quotidienne</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Date</label><input type="date" id="lf-date"></div>
+    <div class="form-group"><label>Type d'aliment</label>
+      <select id="lf-type">{% for t in ["Orge","Foin / Paille","Aliment composé","Ensilage","Son de blé","Maïs","Complément minéral","Autre"] %}<option>{{t}}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Quantité (kg)</label><input type="number" id="lf-qty" min="0" value="20"></div>
+    <div class="form-group"><label>Groupe animal</label>
+      <select id="lf-animal"><option>Tous</option><option>Cattle</option><option>Sheep</option><option>Goat</option><option>Poultry</option></select>
+    </div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="lf-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('logModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitLog()">Enregistrer</button>
+  </div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('input[type=date]').forEach(el=>el.value=new Date().toISOString().split('T')[0]);
+
+function openEditFeed(f){
+  document.getElementById('ef-id').value=f.id;
+  document.getElementById('ef-label').textContent='#'+f.id+' – '+f.feed_type;
+  document.getElementById('ef-type').value=f.feed_type;
+  document.getElementById('ef-origin').value=f.origin;
+  document.getElementById('ef-qty').value=f.quantity_kg;
+  document.getElementById('ef-min').value=f.min_stock_kg;
+  document.getElementById('ef-cost').value=f.cost_per_kg_da;
+  document.getElementById('ef-trans').value=f.transport_cost_da;
+  document.getElementById('ef-date').value=f.purchase_date;
+  document.getElementById('ef-supplier').value=f.supplier||'';
+  document.getElementById('ef-notes').value=f.notes||'';
+  openModal('editFeedModal');
+}
+async function submitEditFeed(){
+  const id=document.getElementById('ef-id').value;
+  const body={feed_type:document.getElementById('ef-type').value,origin:document.getElementById('ef-origin').value,quantity_kg:document.getElementById('ef-qty').value,min_stock_kg:document.getElementById('ef-min').value,cost_per_kg_da:document.getElementById('ef-cost').value,transport_cost_da:document.getElementById('ef-trans').value,purchase_date:document.getElementById('ef-date').value,supplier:document.getElementById('ef-supplier').value,notes:document.getElementById('ef-notes').value};
+  const res=await fetch(`/api/feeds/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editFeedModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+  else showFlash(document.getElementById('flash'),'Erreur.','e');
+}
+async function submitFeed(){
+  const body={feed_type:document.getElementById('ff-type').value,origin:document.getElementById('ff-origin').value,quantity_kg:document.getElementById('ff-qty').value,min_stock_kg:document.getElementById('ff-min').value,cost_per_kg_da:document.getElementById('ff-cost').value,transport_cost_da:document.getElementById('ff-trans').value,purchase_date:document.getElementById('ff-date').value,supplier:document.getElementById('ff-supplier').value,notes:document.getElementById('ff-notes').value};
+  const res=await fetch('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addFeedModal');showFlash(document.getElementById('flash'),'Stock ajouté !');location.reload();}
+}
+async function delFeed(id){
+  if(!confirm('Supprimer ce stock ?'))return;
+  const res=await fetch(`/api/feeds/${id}`,{method:'DELETE'});
+  const d=await res.json();
+  if(d.success){document.getElementById('frow-'+id)?.remove();showFlash(document.getElementById('flash'),'Supprimé.');}
+}
+async function submitLog(){
+  const body={date:document.getElementById('lf-date').value,feed_type:document.getElementById('lf-type').value,quantity_kg:document.getElementById('lf-qty').value,animal_type:document.getElementById('lf-animal').value,notes:document.getElementById('lf-notes').value};
+  const res=await fetch('/api/feeding-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('logModal');showFlash(document.getElementById('flash'),'Alimentation enregistrée !');location.reload();}
+}
+</script>
+{% endblock %}

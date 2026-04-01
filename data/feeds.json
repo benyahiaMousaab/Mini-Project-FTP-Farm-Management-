@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "feed_type": "Orge",
+    "quantity_kg": 500,
+    "min_stock_kg": 100,
+    "origin": "Local",
+    "purchase_date": "2024-01-10",
+    "supplier": "Coopérative Béchar",
+    "cost_per_kg_da": 54,
+    "transport_cost_da": 2000,
+    "notes": "Stock hivernal"
+  },
+  {
+    "id": 2,
+    "feed_type": "Foin / Paille",
+    "quantity_kg": 1200,
+    "min_stock_kg": 200,
+    "origin": "Produit à la ferme",
+    "purchase_date": "2024-01-15",
+    "supplier": "Propre ferme",
+    "cost_per_kg_da": 20,
+    "transport_cost_da": 0,
+    "notes": ""
+  },
+  {
+    "id": 3,
+    "feed_type": "Aliment composé",
+    "quantity_kg": 300,
+    "min_stock_kg": 80,
+    "origin": "Importé",
+    "purchase_date": "2024-02-01",
+    "supplier": "AgriPro Algérie",
+    "cost_per_kg_da": 96,
+    "transport_cost_da": 3500,
+    "notes": "Mélange volailles"
+  },
+  {
+    "id": 4,
+    "feed_type": "Complément minéral",
+    "quantity_kg": 80,
+    "min_stock_kg": 20,
+    "origin": "Importé",
+    "purchase_date": "2024-02-10",
+    "supplier": "VetCo",
+    "cost_per_kg_da": 300,
+    "transport_cost_da": 800,
+    "notes": "Bovins"
+  },
+  {
+    "id": 5,
+    "feed_type": "Son de blé",
+    "quantity_kg": 60,
+    "min_stock_kg": 50,
+    "origin": "Local",
+    "purchase_date": "2024-03-01",
+    "supplier": "Moulin local",
+    "cost_per_kg_da": 30,
+    "transport_cost_da": 500,
+    "notes": ""
+  }
+]

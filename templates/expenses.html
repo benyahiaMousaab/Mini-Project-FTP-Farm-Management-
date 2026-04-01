@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Dépenses – FarmPro{% endblock %}
+{% block page_title %}Gestion des Dépenses{% endblock %}
+{% block content %}
+
+<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+  <div class="kpi"><div class="kpi-icon">💸</div><div class="kpi-value red">{{"{:,.0f}".format(total)}}<span class="da">DA</span></div><div class="kpi-label">Total dépenses</div></div>
+  <div class="kpi"><div class="kpi-icon">🚛</div><div class="kpi-value">{{"{:,.0f}".format(transport_total)}}<span class="da">DA</span></div><div class="kpi-label">Transport</div></div>
+  <div class="kpi"><div class="kpi-icon">📋</div><div class="kpi-value blue">{{ expenses|length }}</div><div class="kpi-label">Transactions</div></div>
+  <div class="kpi"><div class="kpi-icon">📅</div><div class="kpi-value sun">{{"{:,.0f}".format(total / [expenses|length,1]|max)}}<span class="da">DA</span></div><div class="kpi-label">Moy. / dépense</div></div>
+</div>
+
+<form method="get" class="filter-bar">
+  <div><label>🔍 Description</label><input name="search" value="{{ search }}" placeholder="rechercher…"></div>
+  <div><label>Catégorie</label>
+    <select name="category"><option value="">Toutes</option>
+      {% for key,label in categories.items() %}<option {% if filter_cat==key %}selected{% endif %} value="{{key}}">{{label}}</option>{% endfor %}
+    </select>
+  </div>
+  <div><label>Mois (YYYY-MM)</label><input name="month" value="{{ filter_month or '' }}" placeholder="2024-03" style="width:120px"></div>
+  <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+  <a href="/expenses" class="btn btn-outline btn-sm">Réinitialiser</a>
+  <div style="margin-left:auto;display:flex;gap:7px">
+    <a href="/api/export/expenses" class="btn btn-outline btn-sm">⬇ CSV</a>
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addExpModal')">＋ Ajouter dépense</button>
+  </div>
+</form>
+
+<div id="flash" class="flash"></div>
+
+<div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+  <thead><tr><th>ID</th><th>Date</th><th>Catégorie</th><th>Sous-catégorie</th><th>Description</th>
+    <th>Montant DA</th><th>Paiement</th><th>Référence</th><th>Notes</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for e in expenses %}
+  <tr id="erow-{{e.id}}">
+    <td>{{e.id}}</td>
+    <td>{{e.date}}</td>
+    <td><span class="badge {% if e.category=='feed' %}bg-green{% elif e.category=='veterinary' %}bg-blue{% elif e.category=='transport' %}bg-orange{% elif e.category=='salaries' %}bg-purple{% elif e.category=='equipment' %}bg-gray{% else %}bg-yellow{% endif %}">
+      {{ categories.get(e.category, e.category) }}
+    </span></td>
+    <td>{{e.sub_category or '—'}}</td>
+    <td>{{e.description}}</td>
+    <td><strong>{{"{:,.0f}".format(e.amount_da)}}</strong></td>
+    <td><span class="badge bg-gray">{{e.payment_method}}</span></td>
+    <td>{{e.reference or '—'}}</td>
+    <td>{{e.notes or '—'}}</td>
+    <td><div style="display:flex;gap:3px">
+      <button class="btn btn-blue btn-sm" onclick='openEditExp({{e|tojson}})' title="Modifier">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="delExp({{e.id}})" title="Supprimer">🗑</button>
+    </div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div></div>
+
+<!-- ADD -->
+<div class="overlay" id="addExpModal"><div class="modal">
+  <h3>💸 Ajouter une dépense</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Date</label><input type="date" id="e-date"></div>
+    <div class="form-group"><label>Catégorie</label>
+      <select id="e-cat">{% for key,label in categories.items() %}<option value="{{key}}">{{label}}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Sous-catégorie</label><input type="text" id="e-sub" placeholder="ex: Transport foin"></div>
+    <div class="form-group"><label>Montant (DA)</label><input type="number" id="e-amount" min="0" value="0"></div>
+  </div>
+  <div class="form-group"><label>Description *</label><input type="text" id="e-desc" placeholder="Détail de la dépense"></div>
+  <div class="form-row">
+    <div class="form-group"><label>Mode de paiement</label>
+      <select id="e-pay"><option value="espèces">💵 Espèces</option><option value="virement">🏦 Virement</option><option value="chèque">📝 Chèque</option></select>
+    </div>
+    <div class="form-group"><label>Référence</label><input type="text" id="e-ref" placeholder="N° bon commande…"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="e-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addExpModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitExp()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT -->
+<div class="overlay" id="editExpModal"><div class="modal">
+  <h3>✏️ Modifier dépense — <span id="ee-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="ee-id">
+  <div class="form-row">
+    <div class="form-group"><label>Date</label><input type="date" id="ee-date"></div>
+    <div class="form-group"><label>Catégorie</label>
+      <select id="ee-cat">{% for key,label in categories.items() %}<option value="{{key}}">{{label}}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Sous-catégorie</label><input type="text" id="ee-sub"></div>
+    <div class="form-group"><label>Montant (DA)</label><input type="number" id="ee-amount" min="0"></div>
+  </div>
+  <div class="form-group"><label>Description</label><input type="text" id="ee-desc"></div>
+  <div class="form-row">
+    <div class="form-group"><label>Mode de paiement</label>
+      <select id="ee-pay"><option value="espèces">💵 Espèces</option><option value="virement">🏦 Virement</option><option value="chèque">📝 Chèque</option></select>
+    </div>
+    <div class="form-group"><label>Référence</label><input type="text" id="ee-ref"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="ee-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editExpModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditExp()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('#e-date').value=new Date().toISOString().split('T')[0];
+
+function openEditExp(e){
+  document.getElementById('ee-id').value=e.id;
+  document.getElementById('ee-label').textContent='#'+e.id+' – '+e.description;
+  document.getElementById('ee-date').value=e.date;
+  document.getElementById('ee-cat').value=e.category;
+  document.getElementById('ee-sub').value=e.sub_category||'';
+  document.getElementById('ee-amount').value=e.amount_da;
+  document.getElementById('ee-desc').value=e.description;
+  document.getElementById('ee-pay').value=e.payment_method;
+  document.getElementById('ee-ref').value=e.reference||'';
+  document.getElementById('ee-notes').value=e.notes||'';
+  openModal('editExpModal');
+}
+async function submitEditExp(){
+  const id=document.getElementById('ee-id').value;
+  const body={date:document.getElementById('ee-date').value,category:document.getElementById('ee-cat').value,sub_category:document.getElementById('ee-sub').value,amount_da:document.getElementById('ee-amount').value,description:document.getElementById('ee-desc').value,payment_method:document.getElementById('ee-pay').value,reference:document.getElementById('ee-ref').value,notes:document.getElementById('ee-notes').value};
+  const res=await fetch(`/api/expenses/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editExpModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+}
+async function submitExp(){
+  const body={date:document.getElementById('e-date').value,category:document.getElementById('e-cat').value,sub_category:document.getElementById('e-sub').value,description:document.getElementById('e-desc').value,amount_da:document.getElementById('e-amount').value,payment_method:document.getElementById('e-pay').value,reference:document.getElementById('e-ref').value,notes:document.getElementById('e-notes').value};
+  const res=await fetch('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addExpModal');showFlash(document.getElementById('flash'),'Dépense ajoutée !');location.reload();}
+}
+async function delExp(id){if(!confirm('Supprimer cette dépense ?'))return;const res=await fetch(`/api/expenses/${id}`,{method:'DELETE'});const d=await res.json();if(d.success)document.getElementById('erow-'+id)?.remove();}
+</script>
+{% endblock %}

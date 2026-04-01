@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Analytiques – FarmPro{% endblock %}
+{% block page_title %}Analytiques & Rapports{% endblock %}
+{% block content %}
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">🐄 Animaux par type</span></div><div class="card-body"><canvas id="cType"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">📊 Statut des animaux</span></div><div class="card-body"><canvas id="cStatus"></canvas></div></div>
+</div>
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">🥛 Lait journalier (L) – 30 derniers jours</span></div><div class="card-body"><canvas id="cMilk"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">💰 Revenus par produit (DA)</span></div><div class="card-body"><canvas id="cRevProd"></canvas></div></div>
+</div>
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">🌾 Stock aliments par type (kg)</span></div><div class="card-body"><canvas id="cFeed"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">🌍 Stock par origine (kg)</span></div><div class="card-body"><canvas id="cOrigin"></canvas></div></div>
+</div>
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">💸 Dépenses par catégorie (DA)</span></div><div class="card-body"><canvas id="cExpCat"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">📅 Dépenses mensuelles (DA)</span></div><div class="card-body"><canvas id="cExpMonth"></canvas></div></div>
+</div>
+<div class="chart-grid" style="margin-bottom:16px">
+  <div class="card"><div class="card-header"><span class="card-title">🌱 Rendement cultures réussis (t/ha)</span></div><div class="card-body"><canvas id="cCropYield"></canvas></div></div>
+  <div class="card"><div class="card-header"><span class="card-title">💹 Bénéfice par culture (DA)</span></div><div class="card-body"><canvas id="cCropProfit"></canvas></div></div>
+</div>
+<!-- Full P&L -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><span class="card-title">💹 Bilan Profits & Pertes</span></div>
+  <div class="card-body" id="plBody" style="display:flex;gap:20px;flex-wrap:wrap;align-items:center"></div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const OB={plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}};
+const OL={plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}};
+
+async function load(){
+  const [type,status,milk,revProd,feed,origin,expCat,expM,cropY,cropP,pl]=await Promise.all([
+    fetch('/api/analytics/animals-by-type').then(r=>r.json()),
+    fetch('/api/analytics/animals-by-status').then(r=>r.json()),
+    fetch('/api/analytics/daily-milk').then(r=>r.json()),
+    fetch('/api/analytics/revenue-by-product').then(r=>r.json()),
+    fetch('/api/analytics/feed-stock').then(r=>r.json()),
+    fetch('/api/analytics/feed-origin').then(r=>r.json()),
+    fetch('/api/analytics/expenses-by-category').then(r=>r.json()),
+    fetch('/api/analytics/monthly-expenses').then(r=>r.json()),
+    fetch('/api/analytics/crop-yield').then(r=>r.json()),
+    fetch('/api/analytics/crop-profit').then(r=>r.json()),
+    fetch('/api/analytics/profit-loss').then(r=>r.json()),
+  ]);
+
+  new Chart(document.getElementById('cType'),{type:'doughnut',data:{labels:type.labels,datasets:[{data:type.values,backgroundColor:PAL}]},options:{plugins:{legend:{position:'right'}},cutout:'55%'}});
+  new Chart(document.getElementById('cStatus'),{type:'pie',data:{labels:status.labels,datasets:[{data:status.values,backgroundColor:['#4a7c59','#e8a838','#c0392b']}]},options:{plugins:{legend:{position:'right'}}}});
+  new Chart(document.getElementById('cMilk'),{type:'line',data:{labels:milk.dates,datasets:[{data:milk.values,borderColor:'#2d86c0',backgroundColor:'rgba(45,134,192,.15)',fill:true,tension:.4,pointRadius:2}]},options:OL});
+  new Chart(document.getElementById('cRevProd'),{type:'bar',data:{labels:revProd.labels,datasets:[{label:'DA',data:revProd.values,backgroundColor:PAL,borderRadius:6}]},options:OB});
+  new Chart(document.getElementById('cFeed'),{type:'bar',data:{labels:feed.labels,datasets:[{data:feed.values,backgroundColor:'rgba(74,124,89,.75)',borderRadius:5}]},options:{...OB,indexAxis:'y'}});
+  new Chart(document.getElementById('cOrigin'),{type:'doughnut',data:{labels:origin.labels,datasets:[{data:origin.values,backgroundColor:['#4a7c59','#2d86c0','#e8a838']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  new Chart(document.getElementById('cExpCat'),{type:'bar',data:{labels:expCat.labels,datasets:[{data:expCat.values,backgroundColor:PAL,borderRadius:5}]},options:{...OB,indexAxis:'y'}});
+  new Chart(document.getElementById('cExpMonth'),{type:'line',data:{labels:expM.months,datasets:[{data:expM.values,borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,.12)',fill:true,tension:.4}]},options:OL});
+  new Chart(document.getElementById('cCropYield'),{type:'bar',data:{labels:cropY.labels,datasets:[{data:cropY.values,backgroundColor:'rgba(232,168,56,.8)',borderRadius:5}]},options:OB});
+  new Chart(document.getElementById('cCropProfit'),{type:'bar',data:{labels:cropP.labels,datasets:[{data:cropP.values,backgroundColor:cropP.values.map(v=>v>=0?'rgba(74,124,89,.8)':'rgba(192,57,43,.8)'),borderRadius:5}]},options:OB});
+
+  // P&L
+  const nc=pl.net>=0?'#4a7c59':'#c0392b';
+  document.getElementById('plBody').innerHTML=`
+    <div style="text-align:center;padding:12px 22px;background:#d4edda;border-radius:9px">
+      <div style="font-size:1.5rem;font-weight:700;color:#4a7c59">${pl.production_rev.toLocaleString('fr-DZ')} DA</div>
+      <div style="font-size:.72rem;color:#6a8;text-transform:uppercase">Production</div></div>
+    <div style="font-size:1.5rem;color:#bbb">＋</div>
+    <div style="text-align:center;padding:12px 22px;background:#fff3cd;border-radius:9px">
+      <div style="font-size:1.5rem;font-weight:700;color:#856404">${pl.sales_income.toLocaleString('fr-DZ')} DA</div>
+      <div style="font-size:.72rem;color:#a86;text-transform:uppercase">Ventes animaux</div></div>
+    <div style="font-size:1.5rem;color:#bbb">＋</div>
+    <div style="text-align:center;padding:12px 22px;background:#d4edda;border-radius:9px">
+      <div style="font-size:1.5rem;font-weight:700;color:#4a7c59">${pl.crop_revenue.toLocaleString('fr-DZ')} DA</div>
+      <div style="font-size:.72rem;color:#6a8;text-transform:uppercase">Récoltes</div></div>
+    <div style="font-size:1.5rem;color:#bbb">−</div>
+    <div style="text-align:center;padding:12px 22px;background:#f8d7da;border-radius:9px">
+      <div style="font-size:1.5rem;font-weight:700;color:#c0392b">${pl.expenses.toLocaleString('fr-DZ')} DA</div>
+      <div style="font-size:.72rem;color:#c66;text-transform:uppercase">Dépenses totales</div></div>
+    <div style="font-size:1.5rem;color:#bbb">=</div>
+    <div style="text-align:center;padding:12px 22px;background:${pl.net>=0?'#d4edda':'#f8d7da'};border-radius:9px;border:2px solid ${nc}">
+      <div style="font-size:1.7rem;font-weight:700;color:${nc}">${pl.net>=0?'':'-'}${Math.abs(pl.net).toLocaleString('fr-DZ')} DA</div>
+      <div style="font-size:.72rem;color:${nc};text-transform:uppercase">Bénéfice net ${pl.net>=0?'✅':'❌'}</div></div>`;
+}
+load();
+</script>
+{% endblock %}

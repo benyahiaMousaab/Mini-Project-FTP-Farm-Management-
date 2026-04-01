@@ -1,0 +1,134 @@
+[
+  {
+    "id": 1,
+    "date": "2024-01-10",
+    "category": "feed",
+    "sub_category": "Orge",
+    "description": "Achat orge 500kg",
+    "amount_da": 27000,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 2,
+    "date": "2024-01-15",
+    "category": "transport",
+    "sub_category": "Livraison aliments",
+    "description": "Transport foin Béchar",
+    "amount_da": 2000,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 3,
+    "date": "2024-01-20",
+    "category": "veterinary",
+    "sub_category": "Vaccination",
+    "description": "Vaccination FMDV bovins",
+    "amount_da": 3000,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 4,
+    "date": "2024-02-01",
+    "category": "salaries",
+    "sub_category": "Ouvrier",
+    "description": "Salaire Janvier",
+    "amount_da": 22000,
+    "payment_method": "virement",
+    "reference": "VIR-001",
+    "notes": ""
+  },
+  {
+    "id": 5,
+    "date": "2024-02-10",
+    "category": "transport",
+    "sub_category": "Transport animaux",
+    "description": "Transport bétail marché",
+    "amount_da": 4500,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 6,
+    "date": "2024-02-15",
+    "category": "equipment",
+    "sub_category": "Réparation",
+    "description": "Réparation tracteur",
+    "amount_da": 15000,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 7,
+    "date": "2024-03-01",
+    "category": "seeds_fertilizers",
+    "sub_category": "Semences",
+    "description": "Semences tomates",
+    "amount_da": 18000,
+    "payment_method": "virement",
+    "reference": "BON-045",
+    "notes": ""
+  },
+  {
+    "id": 8,
+    "date": "2024-03-10",
+    "category": "irrigation",
+    "sub_category": "Électricité",
+    "description": "Facture électricité pompe",
+    "amount_da": 8500,
+    "payment_method": "virement",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 9,
+    "date": "2024-03-15",
+    "category": "maintenance",
+    "sub_category": "Infrastructure",
+    "description": "Réparation clôture",
+    "amount_da": 5000,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 10,
+    "date": "2024-04-01",
+    "category": "salaries",
+    "sub_category": "Ouvrier",
+    "description": "Salaire Mars",
+    "amount_da": 22000,
+    "payment_method": "virement",
+    "reference": "VIR-002",
+    "notes": ""
+  },
+  {
+    "id": 11,
+    "date": "2024-04-05",
+    "category": "transport",
+    "sub_category": "Transport récolte",
+    "description": "Transport blé au silo",
+    "amount_da": 8000,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  },
+  {
+    "id": 12,
+    "date": "2024-04-10",
+    "category": "feed",
+    "sub_category": "Aliment composé",
+    "description": "Aliment volaille 300kg",
+    "amount_da": 28800,
+    "payment_method": "espèces",
+    "reference": "",
+    "notes": ""
+  }
+]

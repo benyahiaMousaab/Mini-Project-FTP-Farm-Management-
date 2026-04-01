@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Cultures – FarmPro{% endblock %}
+{% block page_title %}Gestion des Cultures{% endblock %}
+{% block content %}
+
+<form method="get" class="filter-bar">
+  <div><label>🔍 Recherche</label><input name="search" value="{{ search }}" placeholder="nom, variété…"></div>
+  <div><label>Statut</label>
+    <select name="status"><option value="">Tous</option>
+      {% for s in ["Planté","En croissance","Récolté","Échoué"] %}
+      <option {% if filter_status==s %}selected{% endif %} value="{{s}}">{{s}}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+  <a href="/crops" class="btn btn-outline btn-sm">Réinitialiser</a>
+  <div style="margin-left:auto;display:flex;gap:7px">
+    <a href="/api/export/crops" class="btn btn-outline btn-sm">⬇ CSV</a>
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addCropModal')">＋ Ajouter culture</button>
+  </div>
+</form>
+
+<div style="display:flex;align-items:center;margin-bottom:14px;font-size:.88rem;color:var(--muted)">
+  <strong>{{ crops|length }}</strong>&nbsp;cultures &nbsp;·&nbsp; Surface : <strong>{{ "%.1f"|format(crops|sum(attribute='area_ha')) }} ha</strong>
+</div>
+
+<div id="flash" class="flash"></div>
+
+<div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+  <thead><tr><th>ID</th><th>Culture</th><th>Variété</th><th>ha</th>
+    <th>Semis</th><th>Récolte prévue</th><th>Récolte effective</th>
+    <th>Rendement t</th><th>t/ha</th><th>Revenu DA</th>
+    <th>Semences DA</th><th>Engrais DA</th><th>Transport DA</th>
+    <th>Bénéfice DA</th><th>Statut</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for c in crops %}
+  {% set revenue = c.yield_ton * c.sale_price_da_per_ton %}
+  {% set costs = c.seed_cost_da + c.fertilizer_cost_da + c.transport_cost_da %}
+  {% set profit = revenue - costs %}
+  <tr id="crow-{{c.id}}">
+    <td>{{c.id}}</td>
+    <td><strong>{{c.name}}</strong></td>
+    <td>{{c.variety}}</td>
+    <td>{{c.area_ha}}</td>
+    <td>{{c.planted_date}}</td>
+    <td>{{c.expected_harvest_date or '—'}}</td>
+    <td>{{c.actual_harvest_date or '—'}}</td>
+    <td>{% if c.yield_ton>0 %}{{c.yield_ton}}{% else %}—{% endif %}</td>
+    <td>{% if c.yield_ton>0 and c.area_ha>0 %}{{"%.2f"|format(c.yield_ton/c.area_ha)}}{% else %}—{% endif %}</td>
+    <td>{% if revenue>0 %}{{"{:,.0f}".format(revenue)}}{% else %}—{% endif %}</td>
+    <td>{{"{:,.0f}".format(c.seed_cost_da)}}</td>
+    <td>{{"{:,.0f}".format(c.fertilizer_cost_da)}}</td>
+    <td>{% if c.transport_cost_da>0 %}{{"{:,.0f}".format(c.transport_cost_da)}}{% else %}—{% endif %}</td>
+    <td {% if c.status=='Récolté' %}style="font-weight:600;color:{% if profit>=0 %}var(--leaf){% else %}var(--red){% endif %}"{% endif %}>
+      {% if c.status=='Récolté' %}{{"{:+,.0f}".format(profit)}}{% else %}—{% endif %}
+    </td>
+    <td><span class="badge {% if c.status=='Récolté' %}bg-green{% elif c.status=='En croissance' %}bg-blue{% elif c.status=='Planté' %}bg-yellow{% else %}bg-red{% endif %}">{{c.status}}</span></td>
+    <td><div style="display:flex;gap:3px">
+      <button class="btn btn-blue btn-sm" onclick='openEditCrop({{c|tojson}})' title="Modifier">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="delCrop({{c.id}})" title="Supprimer">🗑</button>
+    </div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div></div>
+
+<!-- ADD CROP -->
+<div class="overlay" id="addCropModal"><div class="modal">
+  <h3>🌱 Ajouter une culture</h3>
+  <div class="form-row">
+    <div class="form-group"><label>Nom *</label><input type="text" id="c-name" placeholder="ex: Blé dur"></div>
+    <div class="form-group"><label>Variété</label><input type="text" id="c-variety" placeholder="ex: Bidi 17"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Surface (ha)</label><input type="number" id="c-area" min="0" step="0.1" value="1.0"></div>
+    <div class="form-group"><label>Statut</label>
+      <select id="c-status">{% for s in ["Planté","En croissance","Récolté","Échoué"] %}<option>{{s}}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Date de semis</label><input type="date" id="c-planted"></div>
+    <div class="form-group"><label>Récolte prévue</label><input type="date" id="c-harvest"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Rendement (tonnes)</label><input type="number" id="c-yield" min="0" step="0.1" value="0"></div>
+    <div class="form-group"><label>Prix vente DA/tonne</label><input type="number" id="c-price" min="0" value="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Semences (DA)</label><input type="number" id="c-seed" min="0" value="0"></div>
+    <div class="form-group"><label>Engrais (DA)</label><input type="number" id="c-fert" min="0" value="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Transport récolte (DA)</label><input type="number" id="c-trans" min="0" value="0"></div>
+    <div class="form-group"><label>Irrigation (mm)</label><input type="number" id="c-irr" min="0" value="0"></div>
+  </div>
+  <div class="form-group"><label>Notes</label><input type="text" id="c-notes"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('addCropModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitCrop()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- EDIT CROP -->
+<div class="overlay" id="editCropModal"><div class="modal">
+  <h3>✏️ Modifier culture — <span id="ec-label" style="color:var(--leaf)"></span></h3>
+  <input type="hidden" id="ec-id">
+  <div class="form-row">
+    <div class="form-group"><label>Nom</label><input type="text" id="ec-name"></div>
+    <div class="form-group"><label>Variété</label><input type="text" id="ec-variety"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Surface (ha)</label><input type="number" id="ec-area" min="0" step="0.1"></div>
+    <div class="form-group"><label>Statut</label>
+      <select id="ec-status">{% for s in ["Planté","En croissance","Récolté","Échoué"] %}<option>{{s}}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Date de semis</label><input type="date" id="ec-planted"></div>
+    <div class="form-group"><label>Récolte prévue</label><input type="date" id="ec-harvest"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Récolte effective</label><input type="date" id="ec-actual"></div>
+    <div class="form-group"><label>Rendement (tonnes)</label><input type="number" id="ec-yield" min="0" step="0.1"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Prix vente DA/tonne</label><input type="number" id="ec-price" min="0"></div>
+    <div class="form-group"><label>Irrigation (mm)</label><input type="number" id="ec-irr" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Semences (DA)</label><input type="number" id="ec-seed" min="0"></div>
+    <div class="form-group"><label>Engrais (DA)</label><input type="number" id="ec-fert" min="0"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Transport récolte (DA)</label><input type="number" id="ec-trans" min="0"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="ec-notes"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editCropModal')">Annuler</button>
+    <button class="btn btn-primary" onclick="submitEditCrop()">💾 Sauvegarder</button>
+  </div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('input[type=date]').forEach(el=>el.value=new Date().toISOString().split('T')[0]);
+
+function openEditCrop(c){
+  document.getElementById('ec-id').value=c.id;
+  document.getElementById('ec-label').textContent='#'+c.id+' – '+c.name;
+  document.getElementById('ec-name').value=c.name;
+  document.getElementById('ec-variety').value=c.variety||'';
+  document.getElementById('ec-area').value=c.area_ha;
+  document.getElementById('ec-status').value=c.status;
+  document.getElementById('ec-planted').value=c.planted_date;
+  document.getElementById('ec-harvest').value=c.expected_harvest_date||'';
+  document.getElementById('ec-actual').value=c.actual_harvest_date||'';
+  document.getElementById('ec-yield').value=c.yield_ton;
+  document.getElementById('ec-price').value=c.sale_price_da_per_ton;
+  document.getElementById('ec-irr').value=c.irrigation_mm;
+  document.getElementById('ec-seed').value=c.seed_cost_da;
+  document.getElementById('ec-fert').value=c.fertilizer_cost_da;
+  document.getElementById('ec-trans').value=c.transport_cost_da;
+  document.getElementById('ec-notes').value=c.notes||'';
+  openModal('editCropModal');
+}
+async function submitEditCrop(){
+  const id=document.getElementById('ec-id').value;
+  const body={name:document.getElementById('ec-name').value,variety:document.getElementById('ec-variety').value,area_ha:document.getElementById('ec-area').value,status:document.getElementById('ec-status').value,planted_date:document.getElementById('ec-planted').value,expected_harvest_date:document.getElementById('ec-harvest').value,actual_harvest_date:document.getElementById('ec-actual').value,yield_ton:document.getElementById('ec-yield').value,sale_price_da_per_ton:document.getElementById('ec-price').value,irrigation_mm:document.getElementById('ec-irr').value,seed_cost_da:document.getElementById('ec-seed').value,fertilizer_cost_da:document.getElementById('ec-fert').value,transport_cost_da:document.getElementById('ec-trans').value,notes:document.getElementById('ec-notes').value};
+  const res=await fetch(`/api/crops/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('editCropModal');showFlash(document.getElementById('flash'),'✅ Modifié !');location.reload();}
+  else showFlash(document.getElementById('flash'),'Erreur.','e');
+}
+async function submitCrop(){
+  const body={name:document.getElementById('c-name').value,variety:document.getElementById('c-variety').value,area_ha:document.getElementById('c-area').value,status:document.getElementById('c-status').value,planted_date:document.getElementById('c-planted').value,expected_harvest_date:document.getElementById('c-harvest').value,yield_ton:document.getElementById('c-yield').value,sale_price_da_per_ton:document.getElementById('c-price').value,seed_cost_da:document.getElementById('c-seed').value,fertilizer_cost_da:document.getElementById('c-fert').value,transport_cost_da:document.getElementById('c-trans').value,irrigation_mm:document.getElementById('c-irr').value,notes:document.getElementById('c-notes').value};
+  const res=await fetch('/api/crops',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){closeModal('addCropModal');location.reload();}
+}
+async function delCrop(id){if(!confirm('Supprimer cette culture ?'))return;const res=await fetch(`/api/crops/${id}`,{method:'DELETE'});const d=await res.json();if(d.success)document.getElementById('crow-'+id)?.remove();}
+</script>
+{% endblock %}
