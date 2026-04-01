@@ -1,4 +1,4 @@
-# FarmPro – Farm Management System
+# Bechar Farm – Farm Management System
 Team : -BENYAHIA Mousaab -FILALI Hicham -TEDJINI Ahmed -MESSAOUD Imadeeddine-LAMMARI Oussama
 ## Installation
 ```bash
